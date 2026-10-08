@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import html2canvas from 'html2canvas'
+import { toPng } from 'html-to-image';
 
 interface Recipe {
   id: string
@@ -272,9 +273,9 @@ export default function Home() {
     if (validKeywords.length > 0) {
       validKeywords.forEach((kw) => {
         const term = `%${kw}%`
-        // 💡 字串欄位用 .ilike.${term}，陣列欄位用 .cs.{${kw}}
+        // 💡 字串欄位用 .ilike.${term}
         query = query.or(
-          `title.ilike.${term},category.ilike.${term},device.ilike.${term},steps.ilike.${term},ingredients.cs.{${kw}},tags.ilike.{${kw}}`
+          `title.ilike.${term},category.ilike.${term},device.ilike.${term},steps.ilike.${term},ingredients.ilike.{${kw}},tags.ilike.{${kw}}`
         )
       })
     }
@@ -389,49 +390,69 @@ export default function Home() {
   }
 
   const handleShareImage = async () => {
-    if (!modalContentRef.current || !selectedRecipe) return
-    setIsCapturing(true)
+    if (!modalContentRef.current || !selectedRecipe) return;
+    setIsCapturing(true);
 
     try {
-      const canvas = await html2canvas(modalContentRef.current, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-      })
+      // 1. 稍微延遲，確保圖片和 DOM 渲染穩定 (html-to-image 內建圖片載入處理，所以這裡只需短暫延遲)
+      await new Promise((resolve) => setTimeout(resolve, 200));
 
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          alert('圖片生成失敗')
-          setIsCapturing(false)
-          return
+      // 2. 使用 html-to-image 生成 PNG (對 Modern CSS 支援度極高)
+      // 我們生成 2 倍解析度，確保分享出去不模糊
+      const dataUrl = await toPng(modalContentRef.current, {
+        quality: 0.95,
+        pixelRatio: 2,
+        backgroundColor: '#ffffff', // 強制白色背景，避免截出透明圖
+        // 若 Modal 有捲軸，強制設定為完整的滾動高度
+        width: modalContentRef.current.scrollWidth,
+        height: modalContentRef.current.scrollHeight,
+        style: {
+          // 修正 html-to-image 偶爾在 flex 佈局上的偏差
+          transform: 'scale(1)',
+          transformOrigin: 'top left',
         }
+      });
 
-        const file = new File([blob], `${selectedRecipe.title}.png`, { type: 'image/png' })
+      // 3. 嘗試使用原生分享 API (手機端優先)
+      if (navigator.share && navigator.canShare) {
+        try {
+          // 將 Data URL 轉為 Blob
+          const response = await fetch(dataUrl);
+          const blob = await response.blob();
 
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          try {
+          // 封裝成檔案
+          const file = new File([blob], `${selectedRecipe.title}.png`, { type: 'image/png' });
+
+          // 檢查是否可以分享檔案 (localhost 通常不行，手機版通常可以)
+          if (navigator.canShare({ files: [file] })) {
             await navigator.share({
               files: [file],
               title: selectedRecipe.title,
-            })
-          } catch (err) {
-            console.log('取消圖片分享:', err)
+              text: `跟你分享美味食譜：${selectedRecipe.title}`,
+            });
+            // 分享成功後離開
+            setIsCapturing(false);
+            return;
           }
-        } else {
-          const a = document.createElement('a')
-          a.href = URL.createObjectURL(blob)
-          a.download = `${selectedRecipe.title}.png`
-          a.click()
-          alert('已下載菜色圖片！')
+        } catch (shareError) {
+          console.log('不支援原生分享或使用者取消:', shareError);
+          // 如果分享失敗，將自動降級到下面的「直接下載」流程
         }
-        setIsCapturing(false)
-      }, 'image/png')
+      }
+
+      // 4. 降級方案：直接下載圖片 (Localhost 或不支援分享的電腦瀏覽器)
+      const link = document.createElement('a');
+      link.download = `${selectedRecipe.title}.png`;
+      link.href = dataUrl;
+      link.click();
+
     } catch (err) {
-      console.error('截圖失敗:', err)
-      alert('生成圖片時發生錯誤')
-      setIsCapturing(false)
+      console.error('生成圖片失敗:', err);
+      alert('生成圖片時發生錯誤。這通常是因為使用了較新的 CSS 顏色格式 (如 lab/oklch)，已嘗試修復。');
+    } finally {
+      setIsCapturing(false);
     }
-  }
+  };
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-900 p-4 sm:p-6">
@@ -715,6 +736,7 @@ export default function Home() {
                           <img
                             src={item.image_url}
                             alt={item.title}
+                            crossOrigin="anonymous" // 👈 關鍵：必須加上這行，html2canvas 才能讀取外連圖片
                             className="w-16 h-16 object-cover rounded-xl border border-slate-100 shrink-0"
                           />
                         ) : null}
@@ -857,6 +879,7 @@ export default function Home() {
                   <img
                     src={selectedRecipe.image_url}
                     alt={selectedRecipe.title}
+                    crossOrigin="anonymous" // 👈 關鍵：必須加上這行，html2canvas 才能讀取外連圖片
                     className="w-full h-56 object-cover"
                   />
                 </div>
