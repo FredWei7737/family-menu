@@ -61,13 +61,23 @@ export default function Home() {
       fetchRecipeById(recipeId)
     }
   }, [])
-  // 💡 監聽三星/Android 返回鍵與手勢
+  // 監聽手機返回鍵 / 滑動手勢
   useEffect(() => {
+    // 1. APP 載入時先推一筆歷史，防止系統返回鍵直接關閉 PWA
+    window.history.pushState({ page: 'app' }, '')
+
     const handlePopState = () => {
-      // 當使用者按下三星系統返回鍵時，網址 Hash 會被還原，此時關閉 Modal
+      // 2. 當使用者按手機返回鍵時，行為就「等於按下關閉按鈕 / 回主選單」
       if (selectedRecipe) {
-        setSelectedRecipe(null)
+        // 如果彈窗開著，就關閉彈窗 (等同按下 Modal 的 X)
+        handleCloseModal()
+      } else {
+        // 如果已經在主頁，就執行你「回主選單」的邏輯
+        setActiveTab('menu')
       }
+
+      // 3. 補回歷史紀錄，確保下次再按返回鍵依然能被攔截
+      window.history.pushState({ page: 'app' }, '')
     }
 
     window.addEventListener('popstate', handlePopState)
