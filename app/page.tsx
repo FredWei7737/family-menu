@@ -61,28 +61,32 @@ export default function Home() {
       fetchRecipeById(recipeId)
     }
   }, [])
-  // 💡 新增：監聽手機實體返回鍵 / iOS 手勢滑動
+  // 💡 監聽三星/Android 返回鍵與手勢
   useEffect(() => {
     const handlePopState = () => {
-      // 當使用者按返回鍵或滑動返回時，如果 Modal 是打開的，就將它關閉
-      setSelectedRecipe(null)
+      // 當使用者按下三星系統返回鍵時，網址 Hash 會被還原，此時關閉 Modal
+      if (selectedRecipe) {
+        setSelectedRecipe(null)
+      }
     }
 
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
-  }, [])
+  }, [selectedRecipe])
 
-  // 💡 新增：開啟 Modal 函式（寫入 History 紀錄）
+  // 💡 開啟 Modal：寫入 #modal Hash
   const handleOpenModal = (recipe: Recipe) => {
     setSelectedRecipe(recipe)
-    window.history.pushState({ modalOpen: true }, '')
+    // 加上 #modal 強制觸發歷史紀錄變更
+    window.history.pushState({ modalOpen: true }, '', '#modal')
   }
 
-  // 💡 新增：關閉 Modal 函式（同步退回 History）
+  // 💡 關閉 Modal：移除 Hash 或 Back
   const handleCloseModal = () => {
     if (selectedRecipe) {
       setSelectedRecipe(null)
-      if (window.history.state?.modalOpen) {
+      // 如果目前網址帶有 #modal，執行歷史返回
+      if (window.location.hash === '#modal') {
         window.history.back()
       }
     }
