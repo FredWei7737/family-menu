@@ -61,6 +61,32 @@ export default function Home() {
       fetchRecipeById(recipeId)
     }
   }, [])
+  // 💡 新增：監聽手機實體返回鍵 / iOS 手勢滑動
+  useEffect(() => {
+    const handlePopState = () => {
+      // 當使用者按返回鍵或滑動返回時，如果 Modal 是打開的，就將它關閉
+      setSelectedRecipe(null)
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  // 💡 新增：開啟 Modal 函式（寫入 History 紀錄）
+  const handleOpenModal = (recipe: Recipe) => {
+    setSelectedRecipe(recipe)
+    window.history.pushState({ modalOpen: true }, '')
+  }
+
+  // 💡 新增：關閉 Modal 函式（同步退回 History）
+  const handleCloseModal = () => {
+    if (selectedRecipe) {
+      setSelectedRecipe(null)
+      if (window.history.state?.modalOpen) {
+        window.history.back()
+      }
+    }
+  }
 
   // 當切換到「管理菜單」分頁時載入列表
   useEffect(() => {
@@ -707,7 +733,7 @@ export default function Home() {
                     {searchResults.map((item) => (
                       <div
                         key={item.id}
-                        onClick={() => setSelectedRecipe(item)}
+                        onClick={() => handleOpenModal(item)}
                         className="bg-white p-3.5 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between gap-3 cursor-pointer hover:border-blue-300 active:scale-[0.99] transition relative"
                       >
                         <div className="flex-1 min-w-0">
@@ -737,6 +763,7 @@ export default function Home() {
                             src={item.image_url}
                             alt={item.title}
                             crossOrigin="anonymous" // 👈 關鍵：必須加上這行，html2canvas 才能讀取外連圖片
+                            loading="lazy"
                             className="w-16 h-16 object-cover rounded-xl border border-slate-100 shrink-0"
                           />
                         ) : null}
@@ -809,7 +836,7 @@ export default function Home() {
                 filteredManageRecipes.map((item) => (
                   <div
                     key={item.id}
-                    onClick={() => setSelectedRecipe(item)}
+                    onClick={() => handleOpenModal(item)}
                     className="bg-white p-3.5 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between gap-3 cursor-pointer hover:border-blue-300 transition"
                   >
                     {/* 左側資訊 */}
@@ -841,6 +868,21 @@ export default function Home() {
                       </div>
                     </div>
 
+                    {/* 💡 料理縮圖（有圖片顯示縮圖，無圖片顯示預設圖示） */}
+                    {item.image_url ? (
+                      <img
+                        src={item.image_url}
+                        alt={item.title}
+                        crossOrigin="anonymous"
+                        loading="lazy"
+                        className="w-12 h-12 object-cover rounded-xl border border-slate-100 shrink-0"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-100 shrink-0 flex items-center justify-center text-lg">
+                        🍳
+                      </div>
+                    )}
+
                     {/* 右側操作：編輯與刪除按鈕 */}
                     <div className="flex items-center gap-2 shrink-0">
                       <button
@@ -870,7 +912,7 @@ export default function Home() {
       {/* 5. 菜色詳細內容彈窗 (Modal) */}
       {selectedRecipe && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="fixed inset-0" onClick={() => setSelectedRecipe(null)}></div>
+          <div className="fixed inset-0" onClick={handleCloseModal}></div>
 
           <div className="relative bg-white w-full max-w-md rounded-3xl shadow-xl overflow-hidden z-10 flex flex-col max-h-[90vh]">
             <div ref={modalContentRef} className="p-6 overflow-y-auto space-y-4 bg-white">
@@ -898,7 +940,7 @@ export default function Home() {
                   </h3>
                 </div>
                 <button
-                  onClick={() => setSelectedRecipe(null)}
+                  onClick={handleCloseModal}
                   className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full bg-slate-100 hover:bg-slate-200 transition"
                 >
                   ✕
